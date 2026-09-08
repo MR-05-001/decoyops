@@ -1,0 +1,12 @@
+# frps.toml - DecoyOps Server Configuration
+# INSTRUCTIONS: Copy this file and the `frps` executable to your public VPS.
+# Run with: ./frps -c frps.toml
+
+bindPort = 7000
+
+# Enforce TLS encryption for the tunnel (Hard constraint)
+transport.tls.enable = true
+
+# Secure token authentication
+auth.method = "token"
+auth.token = "decoyops_secure_token_change_me_in_production"

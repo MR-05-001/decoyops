@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-window",
+  "description": "Scoped capabilities for the DecoyOps main window — AGENTS.md HC#4, blueprint v3 §7. No shell:allow-execute. No unscoped fs:allow-write. Docker/DB/network actions are exposed only as named Tauri commands, never a generic exec bridge.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "dialog:default",
+    {
+      "identifier": "fs:allow-read",
+      "allow": [{ "path": "$APPDATA/decoyops/logs/*" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        { "path": "$APPDATA/decoyops/logs/*" },
+        { "path": "$APPDATA/decoyops/config/*" }
+      ]
+    }
+  ]
+}

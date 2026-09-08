@@ -1,0 +1,23 @@
+# frpc.toml - DecoyOps Local Client Configuration
+# INSTRUCTIONS: Edit serverAddr to be the IP address of your public VPS.
+# Edit localIP to match the Bridge IP of your deployed decoy container in the DecoyOps UI.
+
+serverAddr = "YOUR_VPS_IP_HERE"
+serverPort = 7000
+
+# Must match the server to authenticate
+transport.tls.enable = true
+auth.method = "token"
+auth.token = "decoyops_secure_token_change_me_in_production"
+
+# Example: Exposing an SSH Honeypot
+[[proxies]]
+name = "ssh_honeypot"
+type = "tcp"
+# The local IP of the Decoy container (Get this from the DecoyOps Fleet UI)
+localIP = "172.18.0.2"  
+localPort = 2222
+# The public port on your VPS that attackers will hit
+remotePort = 2222
+# Hard constraint: Rate limit to prevent DDoS reflection
+transport.bandwidthLimit = "1MB"

@@ -1,0 +1,62 @@
+/**
+ * DecoyOps design tokens.
+ */
+:root {
+  /* Default: Cyberpunk Glass */
+  --dp-bg: rgba(10, 13, 18, 0.85);
+  --dp-panel: rgba(16, 20, 27, 0.65);
+  --dp-panel-raised: rgba(20, 25, 34, 0.8);
+  --dp-line: rgba(29, 37, 48, 0.5);
+  --dp-line-soft: rgba(23, 29, 38, 0.4);
+
+  --dp-text: #F1F5F9;
+  --dp-text-dim: #94A3B8;
+  --dp-text-faint: #64748B;
+
+  --dp-amber: #F59E0B;
+  --dp-amber-dim: rgba(245, 158, 11, 0.2);
+  --dp-red: #EF4444;
+  --dp-red-dim: rgba(239, 68, 68, 0.2);
+  --dp-teal: #10B981;
+  --dp-teal-dim: rgba(16, 185, 129, 0.2);
+}
+
+[data-theme="classic"] {
+  /* Classic Flat Slate */
+  --dp-bg: #0A0D12;
+  --dp-panel: #10141B;
+  --dp-panel-raised: #141922;
+  --dp-line: #1D2530;
+  --dp-line-soft: #171D26;
+
+  --dp-text: #E7EAEE;
+  --dp-text-dim: #8B94A3;
+  --dp-text-faint: #545E6C;
+
+  --dp-amber: #E3A857;
+  --dp-amber-dim: #6B5230;
+  --dp-red: #E5484D;
+  --dp-red-dim: #4A2226;
+  --dp-teal: #4FD1C5;
+  --dp-teal-dim: #1D3E3B;
+}
+
+[data-theme="minimal"] {
+  /* Midnight Minimal (OLED Black) */
+  --dp-bg: #000000;
+  --dp-panel: #050505;
+  --dp-panel-raised: #0A0A0A;
+  --dp-line: #1F1F1F;
+  --dp-line-soft: #141414;
+
+  --dp-text: #FFFFFF;
+  --dp-text-dim: #A1A1AA;
+  --dp-text-faint: #52525B;
+
+  --dp-amber: #EAB308;
+  --dp-amber-dim: rgba(234, 179, 8, 0.15);
+  --dp-red: #EF4444;
+  --dp-red-dim: rgba(239, 68, 68, 0.15);
+  --dp-teal: #22D3EE;
+  --dp-teal-dim: rgba(34, 211, 238, 0.15);
+}

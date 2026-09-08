@@ -1,0 +1,41 @@
+{
+  "name": "decoyops",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@deck.gl/core": "^9",
+    "@deck.gl/layers": "^9",
+    "@deck.gl/react": "^9",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-fs": "^2.5.2",
+    "@tauri-apps/plugin-opener": "^2",
+    "class-variance-authority": "^0.7",
+    "clsx": "^2",
+    "deck.gl": "^9",
+    "lucide-react": "^0.500",
+    "maplibre-gl": "^5",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-map-gl": "^8",
+    "tailwind-merge": "^3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "tailwindcss": "^4",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
+  }
+}

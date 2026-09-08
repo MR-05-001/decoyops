@@ -1,0 +1,75 @@
+[package]
+name = "decoyops"
+version = "0.1.0"
+description = "Desktop deception & threat intelligence engine"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "decoyops_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# --- Tauri core ---
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# --- Async runtime (AGENTS.md: all async I/O uses tokio) ---
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs", "io-util", "net"] }
+async-trait = "0.1.80"
+
+# --- Docker API client (ADR-001: only used in docker.rs) ---
+bollard = "0.18"
+
+# --- SQLite (blueprint v3 §5: WAL + busy_timeout + single-writer) ---
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# --- OS keyring for secrets (AGENTS.md: never in source/config/logs) ---
+keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
+
+# --- Filesystem watcher for honeypot logs (blueprint v2 §4.2) ---
+notify = "7"
+
+# --- Regex for IoC Extraction ---
+regex = "1.10"
+
+# --- Rate limiting for AbuseIPDB/VirusTotal (blueprint v3 §4) ---
+governor = "0.8"
+
+# --- LRU cache for dedup of threat-intel lookups (blueprint v3 §4) ---
+lru = "0.13"
+
+# --- HTTP client for AbuseIPDB/VirusTotal (blueprint v2 §4.2) ---
+reqwest = { version = "0.12", features = ["json"] }
+
+# --- MaxMind GeoLite2 reader (blueprint v2 §2) ---
+maxminddb = "0.24"
+tauri-plugin-fs = "2"
+futures-util = "0.3.34"
+sha2 = "0.11.0"
+hex = "0.4.3"
+tokio-util = "0.7.19"
+chrono = "0.4.45"
+tauri-plugin-dialog = "2.7.3"
+sysinfo = "0.39.6"
+toml_edit = "0.25.13"
+uuid = { version = "1.26.0", features = ["v4"] }
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
