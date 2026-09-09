@@ -15,7 +15,7 @@ This is a personal research/learning project, actively evolving. See [Project St
 
 **Command Center** — live incident feed, 24h threat trends, and auto-extracted indicators of compromise:
 
-![DecoyOps Command Center](docs/screenshots/command-center.png)
+![DecoyOps Command Center](docs/screenshots/command-center.png.png)
 
 **Deployment Wizard** — one-click deploy across six honeypot templates, plus custom containers:
 
