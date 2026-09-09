@@ -24,8 +24,11 @@ SOFTWARE.
 
 ADDITIONAL SECURITY-RESEARCH USE NOTICE:
 
-This software is designed exclusively for authorized security research and 
+This software is designed exclusively for authorized security research and
 defensive network monitoring. By using this software, you agree that:
 1. You have explicit authorization to deploy this software on the networks and systems where it is used.
 2. You will comply with all applicable local, state, and national laws regarding honeypot operation, network interception, and malware handling.
 3. The authors and contributors are not responsible for any misuse, damage, or legal consequences resulting from the deployment of this software.
+
+This notice is supplementary to, and does not modify or restrict, the MIT
+License granted above.
