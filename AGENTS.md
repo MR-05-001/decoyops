@@ -13,14 +13,15 @@ A native desktop app (Tauri 2.0 + Rust core, React/TS frontend) that deploys, ma
 - Container engine: Docker CE
 - Geolocation: MaxMind GeoLite2, refreshed via `geoipupdate`, never a hand-rolled downloader
 - Threat intel: AbuseIPDB + VirusTotal, free tier — see rate-limit rule below
-- Tunneling: self-hosted FRP only. Never point `frpc` at a public/demo `frps` server.
+- Tunneling: self-hosted FRP or ngrok. FRP ensures traffic stays on controlled infrastructure. ngrok is a simpler, third-party alternative for personal use.
 - Secrets: OS keyring via the `keyring` crate. Never in source, config files, or logs.
 
 ## Hard constraints (violating these is a bug, not a style choice)
 
 1. **No direct Docker socket exposure.** All container operations route through the restricted proxy in `docker.rs`. Never let the frontend or a decoy container touch `/var/run/docker.sock` directly.
-2. **Captured binaries are never executed, ever, on the host.** On capture: `chmod 000` + `.isolated` suffix immediately. VirusTotal submissions are hash-only (SHA-256) by default; full-file upload requires an explicit per-file operator opt-in in the UI, never a default code path.
-3. **Egress-deny by default per decoy.** Every new decoy's bridge subnet gets an explicit `nftables` drop rule at deploy time (see blueprint v3 §6). Any accept rule must be scoped to a single container IP and only exists if the operator has enabled "C2 observation mode" for that specific decoy — never subnet-wide, never default-on.
+2. **Capability-dropped containers.** Decoys deploy with `cap-drop ALL` by default. Capabilities are added back only for specific templates that demonstrably require them.
+3. **Captured binaries are never executed, ever, on the host.** On capture: `chmod 000` + `.isolated` suffix immediately. VirusTotal submissions are hash-only (SHA-256) by default; full-file upload requires an explicit per-file operator opt-in in the UI, never a default code path.
+4. **Egress-deny by default per decoy.** Every new decoy's bridge subnet gets an explicit `nftables` drop rule at deploy time (see blueprint v3 §6). Any accept rule must be scoped to a single container IP and only exists if the operator has enabled "C2 observation mode" for that specific decoy — never subnet-wide, never default-on.
 4. **Tauri IPC surface is an explicit allowlist.** No `shell:allow-execute`. No unscoped `fs:allow-write`. Every Docker/DB/network action is a narrow named command (`deploy_decoy`, `terminate_decoy`, etc.) defined in `src-tauri/capabilities/`, not a generic exec bridge.
 5. **Telemetry is event-driven + reconciled**, not polled on a tight loop. Subscribe to the Docker Events API; also run a 60s reconciliation pass as a drift backstop (blueprint v3 §1).
 6. **Rate-limit third-party lookups.** AbuseIPDB/VirusTotal calls go through a dedup + token-bucket queue (`governor` crate), never a direct call per event. Repeat IPs/hashes within 24h are served from cache, not re-queried.
@@ -54,8 +55,8 @@ A native desktop app (Tauri 2.0 + Rust core, React/TS frontend) that deploys, ma
 **Decision:**
 - Firewall logic is abstracted behind a `FirewallBackend` trait.
 - **Linux:** Uses the `nftables` backend per the blueprint.
-- **Windows:** Egress-deny is a documented, known gap until a WFP (Windows Filtering Platform) backend is implemented.
-- **Enforcement:** Until the WFP backend lands, `deploy_decoy()` on Windows must return a loud, explicit error (or deploy with a persistent UI warning) stating that HC#3 is not enforced. It cannot deploy silently as if the network is fully air-gapped.
+- **Windows:** Egress-deny uses a PowerShell `NetFirewallRule` stopgap until a full WFP (Windows Filtering Platform) backend is implemented.
+- **Enforcement:** The PowerShell mechanism enforces the drop policy but lacks deep driver-level integration. This is acceptable for v1, but WFP is the planned upgrade path.
 
 ---
 

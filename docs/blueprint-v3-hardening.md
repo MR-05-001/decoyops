@@ -124,8 +124,7 @@ conn.pragma_update(None, "busy_timeout", 5000)?;      // wait up to 5s instead o
 
 ---
 
-## 6. Egress-deny firewall rules (concrete nftables, not just "block it")
-
+## 6. Egress-deny firewall rules (nftables and Windows PowerShell)
 Each decoy's bridge network gets an explicit deny-by-default egress rule rather than relying on Docker's default network behavior:
 
 ```bash
@@ -140,7 +139,13 @@ nft add rule inet decoyops decoy_egress ip saddr 172.20.0.0/24 drop
 nft add rule inet decoyops decoy_egress ip saddr 172.20.0.5 tcp dport {80,443} accept
 ```
 
-`deploy_decoy()` writes the base drop rule automatically for every new decoy's subnet. The opt-in accept rule is only inserted if the operator flips the toggle mentioned in v2 §7, and it's scoped to that one container's IP, not the whole subnet.
+`deploy_decoy()` writes the base drop rule automatically for every new decoy's subnet. On Linux, this uses `nftables`. On Windows, a PowerShell `NetFirewallRule` is used as a stopgap until WFP (Windows Filtering Platform) integration is complete. The opt-in accept rule is only inserted if the operator flips the toggle mentioned in v2 §7, and it's scoped to that one container's IP, not the whole subnet.
+
+---
+
+## 8. Capability-Dropped Containers (cap-drop ALL)
+
+Relying on Docker's default capabilities is insufficient. Every honeypot container must be deployed with `--cap-drop ALL`. Only capabilities strictly required by the specific honeypot template (e.g., `NET_BIND_SERVICE` for Dionaea if needed) are explicitly added back via `--cap-add`.
 
 ---
 
