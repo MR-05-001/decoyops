@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Radar, Boxes, ShieldAlert, ServerCog, Settings2, BookOpen, X } from "lucide-react";
+import { Radar, Boxes, ShieldAlert, Settings2, BookOpen, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Dashboard } from "./components/Dashboard";

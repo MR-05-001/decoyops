@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Shield, Key, Server, Trash2, CheckCircle, XCircle, Loader2, Monitor, ChevronDown, Palette } from "lucide-react";
+import { Shield, Key, Server, Trash2, CheckCircle, XCircle, Loader2, Monitor, ChevronDown } from "lucide-react";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 

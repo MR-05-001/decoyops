@@ -24,7 +24,7 @@ const toneClass: Record<NonNullable<Kpi["tone"]>, string> = {
 export function KpiStrip({ items }: KpiStripProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5 pb-0 bg-transparent">
-      {items.map((kpi, i) => (
+      {items.map((kpi, _i) => (
         <div
           key={kpi.label}
           className="interactive-card p-5"
