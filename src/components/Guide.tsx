@@ -201,7 +201,7 @@ export function Guide() {
               <h3 className="font-semibold text-dp-text">B. Mitigate Risks</h3>
               <ul className="list-disc pl-5 space-y-1 text-dp-text-faint">
                 <li><strong>Isolation Verification:</strong> Always ensure the honeypot cannot be used as a launchpad for further attacks. DecoyOps handles this automatically via the <code>nftables</code> egress-deny feature, but you should routinely verify it (e.g., attempt to ping <code>8.8.8.8</code> from inside the container).</li>
-                <li><strong>Regular Updates:</strong> Keep the honeypot container software updated (by redeploying with the <code>:latest</code> tag) to address vulnerabilities that might allow container escapes.</li>
+                <li><strong>Regular Updates:</strong> Keep the honeypot container images updated to address vulnerabilities that might allow container escapes.</li>
                 <li><strong>Access Controls:</strong> Restrict who can physically access this machine or view the DecoyOps dashboard, as the telemetry data itself can be sensitive.</li>
               </ul>
             </div>

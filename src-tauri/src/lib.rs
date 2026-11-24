@@ -1,17 +1,25 @@
-use std::sync::Mutex;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 mod commands;
 mod db;
 mod docker;
 mod firewall;
-mod pipeline;
 mod log_watcher;
+mod pipeline;
 mod quarantine;
 pub mod tunnel;
 
 use commands::DbRead;
 use docker::{DockerProxy, FleetEvent};
+
+/// Canonical resolved directories shared across DockerProxy, LogWatcher, and Tauri commands.
+#[derive(Clone)]
+pub struct AppPaths {
+    pub data_dir: PathBuf,
+    pub quarantine_dir: PathBuf,
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,31 +29,50 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             use tauri::Manager;
-            
-            let db_path = "decoyops.db".to_string();
+
+            // MED-1 fix: resolve database path inside app_data_dir consistently across restarts and working directories
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+            let _ = std::fs::create_dir_all(&app_data_dir);
+            let db_path = app_data_dir.join("decoyops.db").to_string_lossy().to_string();
+
             let read_conn =
                 db::open_database(&db_path).expect("failed to open database for read connection");
-        
-            let db_writer = db::spawn_writer_task(db_path);
-        
-            // Initialize DockerProxy
-            let docker_proxy = DockerProxy::connect().expect("Failed to connect to Docker daemon");
-        
+
+            let db_writer = db::spawn_writer_task(db_path.clone());
+
+            let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let data_dir = if current_dir.join("data").exists() {
+                current_dir.join("data")
+            } else {
+                app_data_dir.join("data")
+            };
+            let logs_dir = data_dir.join("logs");
+            let binaries_dir = data_dir.join("binaries");
+            let _ = std::fs::create_dir_all(&logs_dir);
+            let _ = std::fs::create_dir_all(&binaries_dir);
+
+            // Initialize DockerProxy with canonical data_dir
+            let docker_proxy = DockerProxy::connect_with_data_dir(data_dir.clone())
+                .expect("Failed to connect to Docker daemon");
+
             // Spawn telemetry tasks
             let (tx_events, mut rx_events) = mpsc::channel::<FleetEvent>(100);
-        
+
             let docker_proxy_clone1 = docker_proxy.clone();
             let tx_clone1 = tx_events.clone();
             tauri::async_runtime::spawn(async move {
                 docker_proxy_clone1.watch_events(tx_clone1).await;
             });
-        
+
             let docker_proxy_clone2 = docker_proxy.clone();
             let tx_clone2 = tx_events.clone();
             tauri::async_runtime::spawn(async move {
                 docker_proxy_clone2.reconcile_loop(tx_clone2).await;
             });
-        
+
             // Coordinator task: translate FleetEvents to DbCommands
             let db_writer_clone = db_writer.clone();
             tauri::async_runtime::spawn(async move {
@@ -89,29 +116,43 @@ pub fn run() {
                     }
                 }
             });
-        
-            let app_data_dir = std::env::current_dir().map_err(|e| e.to_string())?; // Use current dir for test scaffold
-            
+
             // Attempt to load MaxMind GeoIP database
-            let geoip_reader = maxminddb::Reader::open_readfile(app_data_dir.join("data").join("GeoLite2-City.mmdb"))
+            let geoip_path = if data_dir.join("GeoLite2-City.mmdb").exists() {
+                data_dir.join("GeoLite2-City.mmdb")
+            } else {
+                app_data_dir.join("data").join("GeoLite2-City.mmdb")
+            };
+            let geoip_reader = maxminddb::Reader::open_readfile(geoip_path)
                 .ok()
-                .map(std::sync::Arc::new);
-                
+                .map(Arc::new);
+
             if geoip_reader.is_none() {
                 println!("MaxMind GeoLite2-City.mmdb not found in data/. Map coordinates will be missing.");
             }
-        
+
             let pipeline = pipeline::ThreatIntelPipeline::new(db_writer.clone(), geoip_reader);
-            let quarantine = quarantine::QuarantineManager::new(&app_data_dir).map_err(|e| format!("{:?}", e))?;
-            
-            let watcher = log_watcher::LogWatcher::new(app_data_dir.join("data").join("logs"), pipeline.clone());
+            let quarantine = Arc::new(
+                quarantine::QuarantineManager::new(&app_data_dir)
+                    .map_err(|e| format!("{:?}", e))?,
+            );
+
+            let watcher = log_watcher::LogWatcher::new(&logs_dir, pipeline.clone())
+                .with_db_path(&db_path)
+                .with_quarantine(&binaries_dir, quarantine.clone(), db_writer.clone());
             watcher.start();
+
+            let app_paths = AppPaths {
+                data_dir,
+                quarantine_dir: quarantine.quarantine_dir().to_path_buf(),
+            };
 
             app.manage(DbRead(Mutex::new(read_conn)));
             app.manage(commands::DbWriter(db_writer.clone()));
             app.manage(docker_proxy);
             app.manage(pipeline);
-            app.manage(std::sync::Arc::new(quarantine));
+            app.manage(quarantine);
+            app.manage(app_paths);
 
             Ok(())
         })

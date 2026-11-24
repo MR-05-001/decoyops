@@ -4,7 +4,7 @@ import { FileWarning, FileCode2, Search, Shield } from 'lucide-react';
 
 interface CapturedFile {
   id: number;
-  session_id: number;
+  session_id: number | null;
   container_id: string;
   sha256: string;
   original_name: string | null;
@@ -35,6 +35,7 @@ export function Quarantine() {
   const [files, setFiles] = useState<CapturedFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<CapturedFile | null>(null);
   const [hexDump, setHexDump] = useState<string | null>(null);
+  const [hexError, setHexError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [vtLoading, setVtLoading] = useState(false);
   const [vtResult, setVtResult] = useState<string | null>(null);
@@ -57,13 +58,15 @@ export function Quarantine() {
   const handleSelectFile = async (file: CapturedFile) => {
     setSelectedFile(file);
     setHexDump(null);
-    setVtResult(null);
+    setHexError(null);
+    setVtResult(file.vt_result_json || null);
     setIsLoading(true);
     try {
       const hex = await invoke<string>('read_quarantine_hex', { filePath: file.isolated_path });
       setHexDump(hex);
-    } catch (e) {
+    } catch (e: any) {
       setHexDump(null);
+      setHexError(e?.toString() || 'Failed to read isolated payload');
     }
     setIsLoading(false);
   };
@@ -73,11 +76,23 @@ export function Quarantine() {
     setVtLoading(true);
     try {
       const result = await invoke<string>('enrich_hash', { hash: selectedFile.sha256 });
-      setVtResult(result);
+      try {
+        setVtResult(JSON.stringify(JSON.parse(result), null, 2));
+      } catch {
+        setVtResult(result);
+      }
+      await fetchQuarantine();
     } catch (e: any) {
       setVtResult(`Lookup failed: ${e}`);
     }
     setVtLoading(false);
+  };
+
+  const formatUtcTimestamp = (ts: string): string => {
+    if (!ts) return "—";
+    const normalized = ts.includes("T") || ts.endsWith("Z") ? ts : `${ts.replace(" ", "T")}Z`;
+    const d = new Date(normalized);
+    return Number.isNaN(d.getTime()) ? ts : d.toLocaleString();
   };
 
   const formatHex = (raw: string): string => {
@@ -138,7 +153,7 @@ export function Quarantine() {
                       selectedFile?.id === file.id ? "bg-dp-panel-raised" : "hover:bg-dp-teal/5"
                     }`}
                   >
-                    <td className="px-5 py-2.5 font-mono text-[10.5px] text-dp-text-dim">{new Date(file.captured_at).toLocaleString()}</td>
+                    <td className="px-5 py-2.5 font-mono text-[10.5px] text-dp-text-dim">{formatUtcTimestamp(file.captured_at)}</td>
                     <td className="px-5 py-2.5 font-mono text-[10.5px] text-dp-text-dim" title={file.sha256}>{file.sha256.substring(0, 16)}…</td>
                     <td className="px-5 py-2.5 font-mono text-[10.5px] text-dp-text-dim">{file.file_size ? `${(file.file_size / 1024).toFixed(1)} KB` : "—"}</td>
                     <td className="px-5 py-2.5">
@@ -190,6 +205,8 @@ export function Quarantine() {
                   <div className="bg-dp-bg border border-dp-line p-2 h-48 overflow-y-auto">
                     {isLoading ? (
                       <div className="font-mono text-[10px] text-dp-text-faint animate-pulse">Reading bytes…</div>
+                    ) : hexError ? (
+                      <div className="font-mono text-[10px] text-dp-red">{hexError}</div>
                     ) : (
                       <pre className="font-mono text-[9.5px] text-dp-text-dim leading-relaxed whitespace-pre">
                         {hexDump ? formatHex(hexDump) : "No data"}

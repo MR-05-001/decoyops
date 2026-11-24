@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 export interface DecoyStatus {
@@ -54,8 +54,11 @@ export function useDecoyOps() {
   const [error, setError] = useState<string | null>(null);
   const [networks, setNetworks] = useState<string[]>([]);
   const [frpRunning, setFrpRunning] = useState(false);
+  const isFetchingRef = useRef(false);
 
   const fetchTelemetry = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const [newCounters, newDecoys, newFeed, newIocs] = await Promise.all([
         invoke<DashboardCounters>('get_dashboard_counters'),
@@ -91,6 +94,8 @@ export function useDecoyOps() {
     } catch (err: any) {
       console.error('Failed to fetch telemetry or ping docker:', err);
       setError(err.toString());
+    } finally {
+      isFetchingRef.current = false;
     }
   }, []);
 

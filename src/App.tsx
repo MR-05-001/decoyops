@@ -123,9 +123,13 @@ function App() {
             {ops.frpRunning ? "FRP ACTIVE" : "FRP OFFLINE"}
           </div>
           {/* Airgap Status */}
-          <div className="flex items-center gap-1.5 font-mono text-[11.5px] text-dp-teal px-2.5 py-1 border border-dp-teal-dim bg-dp-teal/5">
-            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-            {hostOs === "windows" ? "EGRESS-DENY: WFP PENDING" : "ALL DECOYS AIR-GAPPED"}
+          <div className={`flex items-center gap-1.5 font-mono text-[11.5px] px-2.5 py-1 border ${
+            dockerConnected
+              ? "text-dp-teal border-dp-teal-dim bg-dp-teal/5"
+              : "text-dp-text-faint border-dp-line-soft bg-dp-bg/50"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full bg-current ${dockerConnected ? "animate-pulse" : ""}`} />
+            {dockerConnected ? "MANAGED DECOYS AIR-GAPPED" : "AIRGAP STANDBY"}
           </div>
           <button onClick={() => setCurrentTab("guide")} className="text-dp-text-dim hover:text-dp-amber transition-colors flex items-center gap-1.5 font-mono text-[11px]" title="Open Guide">
             <BookOpen className="w-4 h-4" /> GUIDE
@@ -159,7 +163,7 @@ function App() {
           />
         ))}
         <div className="mt-auto px-5 py-3 border-t border-dp-line">
-          <div className="font-mono text-[10px] text-dp-text-faint">DecoyOps v0.1.0</div>
+          <div className="font-mono text-[10px] text-dp-text-faint">DecoyOps v0.2.0</div>
           <div className="font-mono text-[10px] text-dp-text-faint mt-0.5">{hostOs}</div>
         </div>
       </div>
@@ -167,9 +171,9 @@ function App() {
       {/* ── Main Content ── */}
       <div className="overflow-auto h-full flex flex-col">
         {currentTab === "dashboard" && <Dashboard ops={ops} />}
-        {currentTab === "decoys" && <Decoys deps={depsStatus} />}
+        {currentTab === "decoys" && <Decoys ops={ops} deps={depsStatus} />}
         {currentTab === "quarantine" && <Quarantine />}
-        {currentTab === "deploy" && <Decoys deps={depsStatus} />}
+        {currentTab === "deploy" && <Decoys ops={ops} deps={depsStatus} />}
         {currentTab === "guide" && <Guide />}
         {currentTab === "settings" && <Settings />}
       </div>

@@ -35,6 +35,21 @@ export function Dashboard({ ops }: DashboardProps) {
           extraContext = ` ➔ downloaded: ${raw.url}`;
         } else if (e.event_type === "cowrie.session.file_upload" && raw.filename) {
           extraContext = ` ➔ uploaded: ${raw.filename}`;
+        } else if (e.event_type.startsWith("mailoney.") && (raw.data || raw.command)) {
+          extraContext = ` ➔ ${raw.data || raw.command}`;
+        } else if (e.event_type.startsWith("elasticpot.") && (raw.url || raw.message)) {
+          extraContext = ` ➔ ${raw.request || ''} ${raw.url || raw.message}`.trim();
+        } else if (e.event_type.startsWith("conpot.") && (raw.request || raw.data_type)) {
+          const reqDetail = typeof raw.request === 'string' ? raw.request : (raw.request ? JSON.stringify(raw.request) : '');
+          extraContext = ` ➔ ${raw.data_type || ''} ${reqDetail}`.trim();
+        } else if (e.event_type.startsWith("endlessh.")) {
+          if (raw.duration) {
+            extraContext = ` ➔ trapped ${raw.duration}s (${raw.bytes ?? 0}B)`;
+          } else if (raw.src_port) {
+            extraContext = ` ➔ tarpit engaged (src port ${raw.src_port})`;
+          }
+        } else if (e.event_type.startsWith("dionaea.") && raw.dst_port) {
+          extraContext = ` ➔ port ${raw.dst_port}`;
         }
       } catch (_) {
         // ignore JSON parse errors

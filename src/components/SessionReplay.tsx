@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { X, Terminal } from "lucide-react";
 
@@ -10,6 +11,16 @@ interface SessionReplayProps {
 export function SessionReplay({ logPath, onClose }: SessionReplayProps) {
   const [content, setContent] = useState<string>("Loading TTY log...");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     const fetchLog = async () => {
@@ -24,9 +35,15 @@ export function SessionReplay({ logPath, onClose }: SessionReplayProps) {
     fetchLog();
   }, [logPath]);
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-8">
-      <div className="w-full max-w-4xl h-[80vh] flex flex-col bg-dp-panel border border-dp-line shadow-2xl rounded">
+  return createPortal(
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-8"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-4xl h-[80vh] flex flex-col bg-dp-panel border border-dp-line shadow-2xl rounded"
+      >
         
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-dp-line-soft shrink-0">
@@ -60,7 +77,7 @@ export function SessionReplay({ logPath, onClose }: SessionReplayProps) {
         {/* Footer */}
         <div className="px-5 py-2.5 border-t border-dp-line-soft bg-dp-panel-raised shrink-0 flex justify-between items-center">
           <div className="text-[10px] text-dp-text-faint font-mono">
-            RAW HEX / TEXT MODE (Escape Sequences Disabled)
+            DECODED TTY STREAM (ANSI Escapes Stripped)
           </div>
           <button 
             onClick={onClose}
@@ -71,6 +88,7 @@ export function SessionReplay({ logPath, onClose }: SessionReplayProps) {
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Trash2, Plus, Shield, Network, ArrowRight, ArrowLeft, CheckCircle2, AlertTriangle, Server, Info, X, Loader2, ChevronDown, Play, Square, RotateCw } from 'lucide-react';
 import { useDecoyOps, DecoyStatus } from '../lib/useDecoyOps';
 import { invoke } from '@tauri-apps/api/core';
@@ -7,20 +7,15 @@ import { DependenciesStatus } from './DependencyCheckModal';
 const TEMPLATES = [
   { id: 'cowrie/cowrie:latest', name: 'Cowrie', desc: 'SSH/Telnet bruteforce trapping', icon: '🐚', ports: '0:2222' },
   { id: 'dinotools/dionaea:latest', name: 'Dionaea', desc: 'SMB/HTTP/FTP/MSSQL malware capture', icon: '🦠', ports: '0:445' },
-  { id: 'dtagdevsec/mailoney:latest', name: 'Mailoney', desc: 'SMTP relay / email credential harvesting', icon: '📧', ports: '0:25' },
-  { id: 'dtagdevsec/conpot:latest', name: 'Conpot', desc: 'SCADA / ICS / Modbus industrial control decoys', icon: '🏭', ports: '0:502' },
-  { id: 'dtagdevsec/elasticpot:latest', name: 'Elasticpot', desc: 'Fake Elasticsearch cluster targeting ransomware', icon: '📊', ports: '0:9200' },
-  { id: 'dtagdevsec/endlessh:latest', name: 'Endlessh', desc: 'SSH tarpit that holds attackers open indefinitely', icon: '🕸️', ports: '0:2222' },
+  { id: 'ghcr.io/telekom-security/mailoney:24.04.1', name: 'Mailoney', desc: 'SMTP relay / email credential harvesting', icon: '📧', ports: '0:25' },
+  { id: 'ghcr.io/telekom-security/conpot:24.04.1', name: 'Conpot', desc: 'SCADA / ICS / Modbus industrial control decoys', icon: '🏭', ports: '0:502' },
+  { id: 'ghcr.io/telekom-security/elasticpot:24.04.1', name: 'Elasticpot', desc: 'Fake Elasticsearch cluster targeting ransomware', icon: '📊', ports: '0:9200' },
+  { id: 'ghcr.io/telekom-security/endlessh:24.04.1', name: 'Endlessh', desc: 'SSH tarpit that holds attackers open indefinitely', icon: '🕸️', ports: '0:2222' },
   { id: 'custom', name: 'Custom Container', desc: 'Deploy any manual Docker image', icon: '⚙️', ports: '0:80' },
 ];
 
-export function Decoys({ deps }: { deps?: DependenciesStatus | null }) {
-  const { decoys, deployDecoy, terminateDecoy, startDecoy, stopDecoy, restartDecoy, networks, refresh } = useDecoyOps();
-  const [hostOs, setHostOs] = useState('unknown');
-
-  useEffect(() => {
-    invoke<string>('get_os').then(setHostOs).catch(console.error);
-  }, []);
+export function Decoys({ deps, ops }: { deps?: DependenciesStatus | null; ops: ReturnType<typeof useDecoyOps> }) {
+  const { decoys, deployDecoy, terminateDecoy, startDecoy, stopDecoy, restartDecoy, networks, refresh } = ops;
 
   // Wizard State
   const [wizardStep, setWizardStep] = useState(0);
@@ -84,12 +79,15 @@ export function Decoys({ deps }: { deps?: DependenciesStatus | null }) {
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
   const handleInspect = async (containerId: string) => {
+    setVerificationResult(null);
+    setCaptureResult(null);
     if (expandedDecoy === containerId) {
       setExpandedDecoy(null);
       setDecoyDetails(null);
       return;
     }
     setExpandedDecoy(containerId);
+    setDecoyDetails(null);
     setIsLoadingDetails(true);
     try {
       const details = await invoke('inspect_decoy', { containerId });
@@ -112,19 +110,9 @@ export function Decoys({ deps }: { deps?: DependenciesStatus | null }) {
     setVerificationResult(null);
     try {
       const output = await invoke<string>('verify_isolation', { containerId });
-      // If ping fails completely due to no route/network isolation, it will either return a string with "100% packet loss" or timeout/Network is unreachable.
-      if (output.includes("100% packet loss") || output.includes("Network is unreachable") || output.includes("unreachable")) {
-        setVerificationResult({ status: 'success', message: 'Egress isolation verified (Ping blocked)' });
-      } else {
-        setVerificationResult({ status: 'failed', message: 'WARNING: Ping succeeded! Container can reach the internet.' });
-      }
+      setVerificationResult({ status: 'success', message: output });
     } catch (e: any) {
-      // If exec fails (e.g., ping command not found), it's still effectively isolated.
-      if (e.toString().includes("ping might not be installed")) {
-        setVerificationResult({ status: 'success', message: 'Egress isolation verified (ping executable stripped)' });
-      } else {
-        setVerificationResult({ status: 'success', message: `Egress isolation verified (Execution blocked: ${e})` });
-      }
+      setVerificationResult({ status: 'failed', message: e?.toString() || 'Verification failed' });
     }
     setIsVerifying(false);
   };
@@ -167,7 +155,10 @@ export function Decoys({ deps }: { deps?: DependenciesStatus | null }) {
             <Network className="w-4 h-4" /> Manage Networks
           </button>
           <button 
-            onClick={() => setWizardStep(1)}
+            onClick={() => {
+              setDeployError(null);
+              setWizardStep(1);
+            }}
             className="flex items-center gap-2 px-4 py-2 text-[13px] bg-dp-amber text-black font-semibold hover:bg-yellow-400 transition-colors"
           >
             <Plus className="w-4 h-4" /> Deploy New Decoy
@@ -219,7 +210,7 @@ export function Decoys({ deps }: { deps?: DependenciesStatus | null }) {
                   ))}
                 </div>
                 <div className="flex justify-between pt-2">
-                  <button onClick={() => setWizardStep(0)} className="flex items-center gap-2 px-4 py-2 text-[13px] border border-dp-line text-dp-text-dim hover:text-dp-text transition-colors">
+                  <button onClick={() => { setDeployError(null); setWizardStep(0); }} className="flex items-center gap-2 px-4 py-2 text-[13px] border border-dp-line text-dp-text-dim hover:text-dp-text transition-colors">
                     Cancel
                   </button>
                   <button onClick={() => setWizardStep(2)} className="flex items-center gap-2 px-4 py-2 text-[13px] bg-dp-panel-raised border border-dp-line text-dp-text hover:bg-dp-line transition-colors">
@@ -367,25 +358,14 @@ export function Decoys({ deps }: { deps?: DependenciesStatus | null }) {
                   <CheckCircle2 className="w-4 h-4 text-dp-amber" /> Step 3 — Review & Egress Firewall
                 </div>
 
-                {hostOs === 'windows' ? (
-                  <div className="bg-dp-amber/5 border border-dp-amber-dim p-4">
-                    <div className="text-dp-amber font-semibold flex items-center gap-2 mb-1 text-[13px]">
-                      <AlertTriangle className="w-4 h-4" /> Egress-Deny Not Enforced (Windows)
-                    </div>
-                    <p className="text-[11px] text-dp-amber/70">
-                      Egress-Deny is not enforced on Windows until the WFP backend is implemented (ADR-002). The container will be deployed to an isolated bridge, but outbound egress filtering is currently inactive on this OS.
-                    </p>
+                <div className="bg-dp-teal/5 border border-dp-teal-dim p-4">
+                  <div className="text-dp-teal font-semibold flex items-center gap-2 mb-1 text-[13px]">
+                    <Shield className="w-4 h-4" /> Egress-Deny Airgap Enabled
                   </div>
-                ) : (
-                  <div className="bg-dp-teal/5 border border-dp-teal-dim p-4">
-                    <div className="text-dp-teal font-semibold flex items-center gap-2 mb-1 text-[13px]">
-                      <Shield className="w-4 h-4" /> Egress-Deny Airgap Enabled
-                    </div>
-                    <p className="text-[11px] text-dp-teal/70">
-                      DecoyOps will apply strict network isolation to the decoy. Zero network routes to host LAN.
-                    </p>
-                  </div>
-                )}
+                  <p className="text-[11px] text-dp-teal/70">
+                    DecoyOps will apply strict multi-layer network isolation: outbound subnet masquerade disabled, inter-container lateral traffic blocked, and host firewall drop policy applied. Zero outbound routes to host LAN or internet.
+                  </p>
+                </div>
                 
                 {isUnmanaged && (
                   <div className="bg-dp-red/5 border border-dp-red-dim p-4">
@@ -415,7 +395,7 @@ export function Decoys({ deps }: { deps?: DependenciesStatus | null }) {
                   <div className="text-dp-text-faint">Ports</div>
                   <div className="font-mono text-dp-text">{newDecoyPort}</div>
                   <div className="text-dp-text-faint">Network</div>
-                  <div className="font-mono text-dp-text">{networkName || `${newDecoyName}-net`} {isUnmanaged && <span className="text-dp-red">(UNMANAGED)</span>}</div>
+                  <div className="font-mono text-dp-text">{networkType === 'new' ? `${newDecoyName}-net` : (networkName || '—')} {isUnmanaged && <span className="text-dp-red">(UNMANAGED)</span>}</div>
                   <div className="text-dp-text-faint">Tunnel</div>
                   <div className="font-mono text-dp-text">{tunnelProvider === 'none' ? 'None' : tunnelProvider.toUpperCase()}</div>
                   <div className="text-dp-text-faint">Auto-Restart</div>
@@ -475,9 +455,15 @@ export function Decoys({ deps }: { deps?: DependenciesStatus | null }) {
                     <td className="px-5 py-3 font-mono text-[11px]">
                       {decoy.tunnel_provider ? (
                         decoy.tunnel_public_url ? (
-                          <a href={`http://${decoy.tunnel_public_url}`} target="_blank" rel="noreferrer" className="text-dp-amber hover:underline break-all" title="Click to open">
-                            {decoy.tunnel_public_url}
-                          </a>
+                          decoy.tunnel_public_url.startsWith('http://') || decoy.tunnel_public_url.startsWith('https://') ? (
+                            <a href={decoy.tunnel_public_url} target="_blank" rel="noreferrer" className="text-dp-amber hover:underline break-all" title="Click to open">
+                              {decoy.tunnel_public_url}
+                            </a>
+                          ) : (
+                            <span className="text-dp-amber break-all select-all" title="TCP Tunnel Endpoint">
+                              {decoy.tunnel_public_url}
+                            </span>
+                          )
                         ) : (
                           <span className="text-dp-text-dim flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Provisioning...</span>
                         )

@@ -42,7 +42,7 @@ export function Sidebar({ currentTab, setTab }: SidebarProps) {
         })}
       </nav>
       <div className="p-6 border-t border-border/50 text-xs text-muted-foreground">
-        Version 0.1.0
+        Version 0.2.0
       </div>
     </div>
   );

@@ -1,4 +1,0 @@
-- name: log_json
-  config:
-    handlers:
-      - file:///opt/dionaea/var/log/dionaea.json

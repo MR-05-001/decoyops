@@ -149,6 +149,10 @@ CREATE INDEX IF NOT EXISTS idx_iocs_value ON iocs(ioc_value);
 CREATE INDEX IF NOT EXISTS idx_iocs_container ON iocs(container_id);
 "#;
 
+const SCHEMA_V4: &str = r#"
+CREATE INDEX IF NOT EXISTS idx_events_container_raw ON events(container_id, raw_data);
+"#;
+
 // ---------------------------------------------------------------------------
 // Connection setup
 // ---------------------------------------------------------------------------
@@ -186,6 +190,10 @@ fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     if version < 3 {
         conn.execute_batch(SCHEMA_V3)?;
         conn.pragma_update(None, "user_version", 3)?;
+    }
+    if version < 4 {
+        conn.execute_batch(SCHEMA_V4)?;
+        conn.pragma_update(None, "user_version", 4)?;
     }
 
     Ok(())
@@ -356,6 +364,12 @@ pub enum DbCommand {
         file_size: Option<i64>,
         isolated_path: String,
     },
+    /// Update VirusTotal status and cached JSON result for a captured file hash.
+    UpdateCapturedFileVt {
+        sha256: String,
+        vt_status: String,
+        vt_result_json: String,
+    },
     /// Cache a threat intel lookup result (24h dedup).
     CacheThreatIntel {
         key: String,
@@ -373,6 +387,12 @@ pub enum DbCommand {
         ioc_type: String,
         ioc_value: String,
     },
+    /// CRIT-1 fix: purge all telemetry data through the writer channel.
+    PurgeAll,
+    /// CRIT-2 fix: factory reset through the writer channel.
+    FactoryReset,
+    /// MED-4 fix: mark an active session as ended upon session disconnect.
+    CloseSession { session_id: i64 },
 }
 
 /// Spawns the single-writer task (blueprint v3 §5).
@@ -436,7 +456,7 @@ fn handle_db_command(conn: &Connection, cmd: DbCommand) -> Result<(), rusqlite::
         }
         DbCommand::DeleteDecoy { container_id } => {
             conn.execute(
-                "UPDATE decoys SET state = 'deleted', updated_at = datetime('now') WHERE container_id = ?1",
+                "UPDATE decoys SET state = 'deleted', tunnel_remote_port = NULL, tunnel_pid = NULL, updated_at = datetime('now') WHERE container_id = ?1",
                 params![container_id],
             )?;
         }
@@ -451,25 +471,43 @@ fn handle_db_command(conn: &Connection, cmd: DbCommand) -> Result<(), rusqlite::
             geo_lon,
             reply,
         } => {
-            let result = conn.execute(
-                "INSERT INTO sessions (decoy_id, container_id, source_ip, source_port, protocol, geo_country, geo_city, geo_lat, geo_lon)
-                 VALUES ((SELECT id FROM decoys WHERE container_id = ?1), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![container_id, source_ip, source_port, protocol, geo_country, geo_city, geo_lat, geo_lon],
+            // MED-4 fix: Check for existing active session from the same container and source IP
+            // that is ongoing (ended_at IS NULL) and active within the last 30 minutes.
+            let existing: Result<i64, _> = conn.query_row(
+                "SELECT id FROM sessions 
+                 WHERE container_id = ?1 AND source_ip = ?2 AND ended_at IS NULL 
+                   AND started_at >= datetime('now', '-30 minutes') 
+                 ORDER BY id DESC LIMIT 1",
+                params![container_id, source_ip],
+                |row| row.get(0),
             );
-            let response = match result {
-                Ok(_) => Ok(conn.last_insert_rowid()),
-                Err(e) => Err(e.to_string()),
-            };
-            // Increment daily stats
-            let _ = conn.execute(
-                "INSERT INTO daily_stats (date, total_sessions, unique_ips, events_count)
-                 VALUES (date('now'), 1, 1, 0)
-                 ON CONFLICT(date) DO UPDATE SET
-                     total_sessions = total_sessions + 1,
-                     unique_ips = (SELECT COUNT(DISTINCT source_ip) FROM sessions WHERE date(started_at) = date('now'))",
-                [],
-            );
-            let _ = reply.send(response);
+
+            if let Ok(existing_id) = existing {
+                let _ = reply.send(Ok(existing_id));
+            } else {
+                let result = conn.execute(
+                    "INSERT INTO sessions (decoy_id, container_id, source_ip, source_port, protocol, geo_country, geo_city, geo_lat, geo_lon)
+                     VALUES ((SELECT id FROM decoys WHERE container_id = ?1), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![container_id, source_ip, source_port, protocol, geo_country, geo_city, geo_lat, geo_lon],
+                );
+                let response = match result {
+                    Ok(_) => {
+                        let row_id = conn.last_insert_rowid();
+                        // Increment daily stats only when session insert succeeded
+                        let _ = conn.execute(
+                            "INSERT INTO daily_stats (date, total_sessions, unique_ips, events_count)
+                             VALUES (date('now'), 1, 1, 0)
+                             ON CONFLICT(date) DO UPDATE SET
+                                 total_sessions = total_sessions + 1,
+                                 unique_ips = (SELECT COUNT(DISTINCT source_ip) FROM sessions WHERE date(started_at) = date('now'))",
+                            [],
+                        );
+                        Ok(row_id)
+                    }
+                    Err(e) => Err(e.to_string()),
+                };
+                let _ = reply.send(response);
+            }
         }
         DbCommand::InsertEvent {
             session_id,
@@ -504,7 +542,12 @@ fn handle_db_command(conn: &Connection, cmd: DbCommand) -> Result<(), rusqlite::
                                      ja3_fingerprint = COALESCE(?2, ja3_fingerprint),
                                      tty_log_path = COALESCE(?3, tty_log_path)
                  WHERE id = ?4",
-                params![ssh_client_version, ja3_fingerprint, tty_log_path, session_id],
+                params![
+                    ssh_client_version,
+                    ja3_fingerprint,
+                    tty_log_path,
+                    session_id
+                ],
             )?;
         }
         DbCommand::InsertCapturedFile {
@@ -515,18 +558,34 @@ fn handle_db_command(conn: &Connection, cmd: DbCommand) -> Result<(), rusqlite::
             file_size,
             isolated_path,
         } => {
-            conn.execute(
+            let inserted = conn.execute(
                 "INSERT INTO captured_files (session_id, container_id, sha256, original_name, file_size, isolated_path)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6
+                 WHERE NOT EXISTS (
+                     SELECT 1 FROM captured_files
+                     WHERE container_id = ?2 AND sha256 = ?3 AND COALESCE(original_name, '') = COALESCE(?4, '')
+                 )",
                 params![session_id, container_id, sha256, original_name, file_size, isolated_path],
             )?;
-            // Increment daily payload count
-            let _ = conn.execute(
-                "INSERT INTO daily_stats (date, total_sessions, unique_ips, payloads_captured, events_count)
-                 VALUES (date('now'), 0, 0, 1, 0)
-                 ON CONFLICT(date) DO UPDATE SET payloads_captured = payloads_captured + 1",
-                [],
-            );
+            if inserted > 0 {
+                // Increment daily payload count
+                let _ = conn.execute(
+                    "INSERT INTO daily_stats (date, total_sessions, unique_ips, payloads_captured, events_count)
+                     VALUES (date('now'), 0, 0, 1, 0)
+                     ON CONFLICT(date) DO UPDATE SET payloads_captured = payloads_captured + 1",
+                    [],
+                );
+            }
+        }
+        DbCommand::UpdateCapturedFileVt {
+            sha256,
+            vt_status,
+            vt_result_json,
+        } => {
+            conn.execute(
+                "UPDATE captured_files SET vt_status = ?1, vt_result_json = ?2 WHERE sha256 = ?3",
+                params![vt_status, vt_result_json, sha256],
+            )?;
         }
         DbCommand::CacheThreatIntel {
             key,
@@ -587,6 +646,42 @@ fn handle_db_command(conn: &Connection, cmd: DbCommand) -> Result<(), rusqlite::
                 params![session_id, container_id, ioc_type, ioc_value],
             )?;
         }
+        DbCommand::PurgeAll => {
+            conn.execute("DELETE FROM iocs", [])?;
+            conn.execute("DELETE FROM events", [])?;
+            conn.execute("DELETE FROM sessions", [])?;
+            conn.execute("DELETE FROM captured_files", [])?;
+            conn.execute("DELETE FROM threat_intel_cache", [])?;
+            // Reset auto-increment counters
+            let _ = conn.execute(
+                "DELETE FROM sqlite_sequence WHERE name IN ('events', 'sessions', 'captured_files', 'iocs')",
+                [],
+            );
+        }
+        DbCommand::FactoryReset => {
+            // Drop all data from every table
+            conn.execute("DELETE FROM iocs", [])?;
+            conn.execute("DELETE FROM events", [])?;
+            conn.execute("DELETE FROM sessions", [])?;
+            conn.execute("DELETE FROM captured_files", [])?;
+            conn.execute("DELETE FROM threat_intel_cache", [])?;
+            conn.execute("DELETE FROM daily_stats", [])?;
+            conn.execute("DELETE FROM decoys", [])?;
+            // Reset settings to defaults
+            conn.execute("DELETE FROM settings", [])?;
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('retention_days', '90')",
+                [],
+            )?;
+            // Reset auto-increment counters
+            let _ = conn.execute("DELETE FROM sqlite_sequence", []);
+        }
+        DbCommand::CloseSession { session_id } => {
+            conn.execute(
+                "UPDATE sessions SET ended_at = datetime('now') WHERE id = ?1 AND ended_at IS NULL",
+                params![session_id],
+            )?;
+        }
     }
     Ok(())
 }
@@ -612,23 +707,23 @@ pub fn get_next_available_remote_port(
     start_port: u16,
     end_port: u16,
 ) -> Result<Option<u16>, rusqlite::Error> {
-    let mut stmt = conn.prepare("SELECT tunnel_remote_port FROM decoys WHERE tunnel_remote_port IS NOT NULL ORDER BY tunnel_remote_port ASC")?;
-    
+    let mut stmt = conn.prepare("SELECT tunnel_remote_port FROM decoys WHERE tunnel_remote_port IS NOT NULL AND state != 'deleted' ORDER BY tunnel_remote_port ASC")?;
+
     let used_ports: Result<Vec<u16>, _> = stmt
         .query_map([], |row| {
             let port: i64 = row.get(0)?;
             Ok(port as u16)
         })?
         .collect();
-    
+
     let used_ports = used_ports?;
-    
+
     for port in start_port..=end_port {
         if !used_ports.contains(&port) {
             return Ok(Some(port));
         }
     }
-    
+
     Ok(None)
 }
 
@@ -793,7 +888,7 @@ pub fn get_dashboard_counters(conn: &Connection) -> Result<DashboardCounters, ru
         active_decoys,
         active_sessions,
         unique_actors,
-            payloads_captured,
+        payloads_captured,
         total_events,
     })
 }
@@ -805,10 +900,10 @@ pub fn get_blocklist(conn: &Connection) -> Result<String, rusqlite::Error> {
          AND source_ip IS NOT NULL 
          AND source_ip != ''",
     )?;
-    
+
     let ips: Result<Vec<String>, _> = stmt.query_map([], |row| row.get(0))?.collect();
     let ips = ips?;
-    
+
     Ok(ips.join("\n"))
 }
 
@@ -846,7 +941,7 @@ pub fn get_session_by_id(
             tty_log_path: row.get(14)?,
         })
     })?;
-    
+
     if let Some(row) = rows.next() {
         row.map(Some)
     } else {
@@ -1021,7 +1116,33 @@ mod tests {
         let version: i32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("failed to query user_version");
-        assert_eq!(version, 1);
+        assert_eq!(version, 4);
+    }
+
+    #[test]
+    fn test_deleted_decoy_releases_remote_port() {
+        let conn = open_database(":memory:").expect("failed to open in-memory db");
+        conn.execute(
+            "INSERT INTO decoys (container_id, name, template_type, port_mapping, tunnel_remote_port)
+             VALUES ('c1', 'ssh-1', 'cowrie', '2222:22', 10000)",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            get_next_available_remote_port(&conn, 10000, 10002).unwrap(),
+            Some(10001)
+        );
+        handle_db_command(
+            &conn,
+            DbCommand::DeleteDecoy {
+                container_id: "c1".to_string(),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            get_next_available_remote_port(&conn, 10000, 10002).unwrap(),
+            Some(10000)
+        );
     }
 
     #[test]
@@ -1095,7 +1216,7 @@ mod tests {
     async fn test_db_writer_recovers_from_error() {
         let conn = open_database(":memory:").expect("failed to open in-memory db");
         let (tx, mut rx) = tokio::sync::mpsc::channel::<DbCommand>(10);
-        
+
         let writer_handle = tokio::spawn(async move {
             let mut processed_count = 0;
             while let Some(cmd) = rx.recv().await {
@@ -1106,7 +1227,7 @@ mod tests {
             }
             processed_count
         });
-        
+
         tx.send(DbCommand::InsertDecoy {
             container_id: "duplicate-id".to_string(),
             name: "test1".to_string(),
@@ -1119,8 +1240,10 @@ mod tests {
             tunnel_provider: None,
             tunnel_remote_port: None,
             tunnel_pid: None,
-        }).await.unwrap();
-        
+        })
+        .await
+        .unwrap();
+
         // This will fail due to UNIQUE constraint
         tx.send(DbCommand::InsertDecoy {
             container_id: "duplicate-id".to_string(),
@@ -1134,8 +1257,10 @@ mod tests {
             tunnel_provider: None,
             tunnel_remote_port: None,
             tunnel_pid: None,
-        }).await.unwrap();
-        
+        })
+        .await
+        .unwrap();
+
         tx.send(DbCommand::InsertDecoy {
             container_id: "different-id".to_string(),
             name: "test2".to_string(),
@@ -1148,11 +1273,16 @@ mod tests {
             tunnel_provider: None,
             tunnel_remote_port: None,
             tunnel_pid: None,
-        }).await.unwrap();
-        
+        })
+        .await
+        .unwrap();
+
         drop(tx);
-        
+
         let processed = writer_handle.await.unwrap();
-        assert_eq!(processed, 3, "Writer loop should process all 3 commands even if one fails");
+        assert_eq!(
+            processed, 3,
+            "Writer loop should process all 3 commands even if one fails"
+        );
     }
 }

@@ -25,6 +25,7 @@ export function Settings() {
   const [uiTheme, setUiTheme] = useState("cyberpunk");
   
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isPurging, setIsPurging] = useState(false);
   const [purgeResult, setPurgeResult] = useState<string | null>(null);
   const [abuseTest, setAbuseTest] = useState<"idle" | "testing" | "ok" | "fail">("idle");
@@ -66,6 +67,7 @@ export function Settings() {
 
   const handleSave = async () => {
     setSaveStatus("saving");
+    setSaveError(null);
     try {
       const tasks: Promise<void>[] = [];
       tasks.push(invoke("save_api_key", { service: "abuseipdb", key: abuseIpdbKey }));
@@ -93,8 +95,9 @@ export function Settings() {
       await Promise.all(tasks);
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 3000);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setSaveError(e?.toString() || "Unknown error");
       setSaveStatus("error");
       setTimeout(() => setSaveStatus("idle"), 5000);
     }
@@ -188,34 +191,25 @@ export function Settings() {
         <div className="border border-dp-line glass-panel">
           <div className="flex items-center gap-2 px-5 py-3.5 border-b border-dp-line-soft glass-header">
             <Shield className="w-4 h-4 text-dp-amber" />
-            <span className="text-[13px] font-semibold text-dp-text">Network & Isolation</span>
+            <span className="text-[13px] font-semibold text-dp-text">Network & Isolation Policy</span>
           </div>
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] text-dp-text-faint uppercase tracking-wider font-medium">Default Subnet (CIDR)</label>
-                <input type="text" defaultValue="172.20.0.0/16" className={inputClass} />
+                <label className="text-[10px] text-dp-text-faint uppercase tracking-wider font-medium">Subnet Allocation</label>
+                <div className={`${inputClass} text-dp-text-dim cursor-not-allowed opacity-80`}>Auto-assigned per decoy bridge</div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] text-dp-text-faint uppercase tracking-wider font-medium">Firewall Engine</label>
-                <div className="relative">
-                  <select className={`${inputClass} appearance-none pr-8`} defaultValue="auto">
-                    <option value="auto">Auto-detect (Recommended)</option>
-                    <option value="nftables">nftables (Linux)</option>
-                    <option value="wfp">WFP (Windows — future)</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dp-text-faint pointer-events-none" />
-                </div>
+                <label className="text-[10px] text-dp-text-faint uppercase tracking-wider font-medium">Firewall Engine (ADR-002)</label>
+                <div className={`${inputClass} text-dp-text-dim cursor-not-allowed opacity-80`}>OS Auto-detected (nftables / NetFirewall + Docker)</div>
               </div>
             </div>
             <div className="flex items-center justify-between p-3 border border-dp-teal-dim bg-dp-teal/5">
               <div>
-                <div className="text-[12px] font-medium text-dp-text">Strict Egress-Deny</div>
-                <div className="text-[10px] text-dp-text-faint mt-0.5">Block all outbound traffic from decoy containers (HC#3)</div>
+                <div className="text-[12px] font-medium text-dp-text">Strict Egress-Deny Enforced</div>
+                <div className="text-[10px] text-dp-text-faint mt-0.5">All managed decoys drop outbound routing by default (HC#3, non-configurable)</div>
               </div>
-              <div className="relative inline-flex h-5 w-9 items-center rounded-full bg-dp-teal cursor-pointer">
-                <span className="inline-block h-3 w-3 transform rounded-full bg-white translate-x-5" />
-              </div>
+              <div className="font-mono text-[10px] px-2 py-0.5 border border-dp-teal-dim text-dp-teal">LOCKED ON</div>
             </div>
           </div>
         </div>
@@ -423,7 +417,7 @@ export function Settings() {
           )}
           {saveStatus === "error" && (
             <span className="flex items-center gap-1.5 text-[11px] font-mono text-dp-red">
-              <XCircle className="w-3.5 h-3.5" /> Failed to save
+              <XCircle className="w-3.5 h-3.5" /> Failed to save{saveError ? `: ${saveError}` : ""}
             </span>
           )}
           <button
