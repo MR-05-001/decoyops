@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="14" fill="#0B0F17"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="12.5" stroke="#1E293B" stroke-width="1.5"/>
+  <!-- Outer amber hexagon shield -->
+  <polygon points="32,8 52.8,20 52.8,44 32,56 11.2,44 11.2,20" stroke="#F59E0B" stroke-width="3.5" stroke-linejoin="round" fill="#111827"/>
+  <!-- Inner honeycomb struts -->
+  <path d="M32 14V21M32 43V50M16.5 23L22.5 26.5M47.5 23L41.5 26.5M16.5 41L22.5 37.5M47.5 41L41.5 37.5" stroke="#F59E0B" stroke-opacity="0.4" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- Stylized eye contour -->
+  <path d="M17.5 32C21.8 25.2 26.7 22.5 32 22.5C37.3 22.5 42.2 25.2 46.5 32C42.2 38.8 37.3 41.5 32 41.5C26.7 41.5 21.8 38.8 17.5 32Z" stroke="#F59E0B" stroke-width="2.6" stroke-linejoin="round"/>
+  <!-- Segmented target iris ring -->
+  <circle cx="32" cy="32" r="7.2" stroke="#F59E0B" stroke-width="2.4" stroke-dasharray="9 2.3" stroke-dashoffset="1.15"/>
+  <!-- Glowing emerald-teal radar core -->
+  <circle cx="32" cy="32" r="3.8" fill="#10B981"/>
+</svg>

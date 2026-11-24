@@ -71,12 +71,15 @@ function App() {
       {/* ── Top Bar ── */}
       <div className="col-span-2 flex items-center justify-between px-6 glass-header z-10">
         <div className="flex items-center gap-2.5">
-          <div className="text-dp-amber relative flex items-center justify-center w-7 h-7">
-            <div className="absolute inset-0 bg-dp-amber/30 blur-[8px] rounded-full animate-pulse-slow" />
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="relative z-10 drop-shadow-[0_0_2px_rgba(245,158,11,0.8)]">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-              <path d="M8 12s1.5-3 4-3 4 3 4 3-1.5 3-4 3-4-3-4-3" />
-              <circle cx="12" cy="12" r="1" fill="currentColor" />
+          <div className="text-dp-amber relative flex items-center justify-center w-8 h-8">
+            <div className="absolute inset-0 bg-dp-amber/25 blur-[8px] rounded-full animate-pulse-slow" />
+            <svg width="28" height="28" viewBox="0 0 64 64" fill="none" className="relative z-10 drop-shadow-[0_0_4px_rgba(245,158,11,0.55)]">
+              <rect x="2" y="2" width="60" height="60" rx="14" fill="#0B0F17" stroke="rgba(245,158,11,0.28)" strokeWidth="1.5" />
+              <polygon points="32,8 52.8,20 52.8,44 32,56 11.2,44 11.2,20" stroke="#F59E0B" strokeWidth="3.8" strokeLinejoin="round" fill="#111827" />
+              <path d="M32 14V21M32 43V50M16.5 23L22.5 26.5M47.5 23L41.5 26.5M16.5 41L22.5 37.5M47.5 41L41.5 37.5" stroke="#F59E0B" strokeOpacity="0.45" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M17.5 32C21.8 25.2 26.7 22.5 32 22.5C37.3 22.5 42.2 25.2 46.5 32C42.2 38.8 37.3 41.5 32 41.5C26.7 41.5 21.8 38.8 17.5 32Z" stroke="#F59E0B" strokeWidth="2.8" strokeLinejoin="round" />
+              <circle cx="32" cy="32" r="7.2" stroke="#F59E0B" strokeWidth="2.6" strokeDasharray="9 2.3" strokeDashoffset="1.15" />
+              <circle cx="32" cy="32" r="3.8" fill="#10B981" />
             </svg>
           </div>
           <div>
@@ -163,7 +166,7 @@ function App() {
           />
         ))}
         <div className="mt-auto px-5 py-3 border-t border-dp-line">
-          <div className="font-mono text-[10px] text-dp-text-faint">DecoyOps v0.2.0</div>
+          <div className="font-mono text-[10px] text-dp-text-faint">DecoyOps v1.1.0</div>
           <div className="font-mono text-[10px] text-dp-text-faint mt-0.5">{hostOs}</div>
         </div>
       </div>
